@@ -1,0 +1,24 @@
+project-root/
+├── cmd/
+│   └── server/
+│       └── main.go           // Точка входа в приложение
+├── internal/
+│   ├── config/
+│   │   └── config.go         // Конфигурация приложения
+│   ├── models/
+│   │   └── user.go           // Модели данных
+│   ├── handlers/
+│   │   ├── auth.go           // Обработчики аутентификации
+│   │   └── profile.go        // Обработчики профиля
+│   ├── middleware/
+│   │   └── auth.go           // Middleware аутентификации
+│   ├── service/
+│   │   └── auth_service.go   // Бизнес-логика сервиса
+│   └── repository/
+│       └── user_repo.go      // Работа с БД
+├── pkg/
+│   └── token/
+│       └── jwt.go            // Работа с JWT токенами
+├── .env                      // Переменные окружения
+├── go.mod                    // Зависимости Go
+└── go.sum                    // Контрольные суммы зависимостей
