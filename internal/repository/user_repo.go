@@ -10,7 +10,7 @@ import (
 type UserRepository interface {
 	CreateUser(email string, password string) (*models.User, error)
 	GetUserByEmail(email string) (*models.User, error)
-	GetUserByID(id int) (*models.User, error)
+	GetUserByID(id uint) (*models.User, error)
 }
 
 type GormUserRepository struct {
@@ -48,7 +48,7 @@ func (r *GormUserRepository) GetUserByEmail(email string) (*models.User, error) 
 	return &user, nil
 }
 
-func (r *GormUserRepository) GetUserByID(id int) (*models.User, error) {
+func (r *GormUserRepository) GetUserByID(id uint) (*models.User, error) {
 	var user models.User
 	result := r.db.First(&user, id)
 	if result.Error != nil {

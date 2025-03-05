@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"sso/internal/config"
+	"sso/internal/handlers"
 	"sso/internal/middleware"
 	"sso/internal/models"
 	"sso/internal/repository"
