@@ -1,7 +1,6 @@
 package service
 
 import (
-	"go/token"
 	"log"
 	"net/http"
 	"sso/internal/config"

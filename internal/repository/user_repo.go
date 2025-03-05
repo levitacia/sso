@@ -2,7 +2,6 @@ package repository
 
 import (
 	"sso/internal/models"
-	"time"
 
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -28,15 +27,32 @@ func (r *GormUserRepository) CreateUser(email, password string) (*models.User, e
 		return nil, err
 	}
 
-	user := &models.User{
-		Email:     email,
-		Password:  string(hashPassword),
-		CreatedAt: time.Now(),
-		UpdateAt:  time.Now(),
+	user := models.User{
+		Email:    email,
+		Password: string(hashPassword),
 	}
-	return user, r.db.Create(user).Error
+
+	if result := r.db.Create(&user); result.Error != nil {
+		return nil, result.Error
+	}
+
+	return &user, nil
 }
 
-func (r *GormUserRepository) GetUserByEmail(email string) *models.User {
+func (r *GormUserRepository) GetUserByEmail(email string) (*models.User, error) {
+	var user models.User
+	result := r.db.Where("email = ?", email).First(&user)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return &user, nil
+}
 
+func (r *GormUserRepository) GetUserByID(id int) (*models.User, error) {
+	var user models.User
+	result := r.db.First(&user, id)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return &user, nil
 }
