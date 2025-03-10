@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"sso/pkg/token"
 	"strings"
@@ -19,6 +20,7 @@ func (m *AuthMiddleware) Authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tokenString := r.Header.Get("Authorization")
 		if tokenString == "" {
+			log.Println("Token is empty")
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
@@ -29,6 +31,7 @@ func (m *AuthMiddleware) Authenticate(next http.Handler) http.Handler {
 
 		_, claims, err := m.tokenManager.ValidateToken(tokenString)
 		if err != nil {
+			log.Println("Token not verify")
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}

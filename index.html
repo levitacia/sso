@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSO Service Tester</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.5.1/axios.min.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto p-4">
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <h1 class="text-2xl font-bold mb-4 text-center">SSO Service Tester</h1>
+            
+            <div class="mb-6">
+                <label class="block mb-2 font-bold">API Base URL:</label>
+                <input type="text" id="apiUrl" class="w-full p-2 border rounded" value="http://localhost:8080">
+            </div>
+
+            <!-- Tabs -->
+            <div class="flex border-b mb-4">
+                <button id="registerTab" class="px-4 py-2 font-bold border-b-2 border-blue-500">Register</button>
+                <button id="loginTab" class="px-4 py-2 font-bold">Login</button>
+                <button id="profileTab" class="px-4 py-2 font-bold">Profile</button>
+                <button id="tokenTab" class="px-4 py-2 font-bold">Token Info</button>
+            </div>
+
+            <!-- Register Form -->
+            <div id="registerForm" class="py-4">
+                <h2 class="text-xl font-bold mb-4">Register New User</h2>
+                <div class="mb-4">
+                    <label class="block mb-2">Email:</label>
+                    <input type="email" id="registerEmail" class="w-full p-2 border rounded">
+                </div>
+                <div class="mb-4">
+                    <label class="block mb-2">Password:</label>
+                    <input type="password" id="registerPassword" class="w-full p-2 border rounded">
+                </div>
+                <button id="registerBtn" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">Register</button>
+            </div>
+
+            <!-- Login Form -->
+            <div id="loginForm" class="py-4 hidden">
+                <h2 class="text-xl font-bold mb-4">Login</h2>
+                <div class="mb-4">
+                    <label class="block mb-2">Email:</label>
+                    <input type="email" id="loginEmail" class="w-full p-2 border rounded">
+                </div>
+                <div class="mb-4">
+                    <label class="block mb-2">Password:</label>
+                    <input type="password" id="loginPassword" class="w-full p-2 border rounded">
+                </div>
+                <button id="loginBtn" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">Login</button>
+                <button id="refreshBtn" class="bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600 ml-2">Refresh Token</button>
+            </div>
+
+            <!-- Profile Section -->
+            <div id="profileSection" class="py-4 hidden">
+                <h2 class="text-xl font-bold mb-4">Protected User Profile</h2>
+                <p class="mb-4">This section uses the JWT token to access protected resources.</p>
+                <button id="getProfileBtn" class="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600">Get Profile</button>
+                <div id="profileData" class="mt-4 p-4 border rounded bg-gray-50 hidden"></div>
+            </div>
+
+            <!-- Token Info Section -->
+            <div id="tokenSection" class="py-4 hidden">
+                <h2 class="text-xl font-bold mb-4">Token Information</h2>
+                <div id="tokenInfo" class="mt-4 p-4 border rounded bg-gray-50">
+                    <p><strong>Status:</strong> <span id="tokenStatus">No token</span></p>
+                    <div id="tokenDetails" class="hidden">
+                        <p><strong>Access Token:</strong> <span id="accessToken" class="break-all text-xs"></span></p>
+                        <p><strong>Refresh Token:</strong> <span id="refreshToken" class="break-all text-xs"></span></p>
+                        <p><strong>Expires At:</strong> <span id="expiresAt"></span></p>
+                    </div>
+                </div>
+                <button id="verifyTokenBtn" class="bg-indigo-500 text-white px-4 py-2 rounded hover:bg-indigo-600 mt-4">Verify Token</button>
+                <button id="clearTokenBtn" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 mt-4 ml-2">Clear Token</button>
+            </div>
+        </div>
+
+        <!-- Response Section -->
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <h2 class="text-xl font-bold mb-4">API Response</h2>
+            <pre id="responseArea" class="bg-gray-800 text-green-400 p-4 rounded overflow-auto max-h-80"></pre>
+        </div>
+    </div>
+
+    <script>
+        // State management
+        let currentToken = null;
+        let currentRefreshToken = null;
+        let tokenExpiry = null;
+
+        // Element references
+        const apiUrlInput = document.getElementById('apiUrl');
+        const registerTab = document.getElementById('registerTab');
+        const loginTab = document.getElementById('loginTab');
+        const profileTab = document.getElementById('profileTab');
+        const tokenTab = document.getElementById('tokenTab');
+        const registerForm = document.getElementById('registerForm');
+        const loginForm = document.getElementById('loginForm');
+        const profileSection = document.getElementById('profileSection');
+        const tokenSection = document.getElementById('tokenSection');
+        const responseArea = document.getElementById('responseArea');
+        const tokenStatus = document.getElementById('tokenStatus');
+        const tokenDetails = document.getElementById('tokenDetails');
+        const accessTokenDisplay = document.getElementById('accessToken');
+        const refreshTokenDisplay = document.getElementById('refreshToken');
+        const expiresAtDisplay = document.getElementById('expiresAt');
+        const profileData = document.getElementById('profileData');
+
+        // Tab switching
+        registerTab.addEventListener('click', () => showTab('register'));
+        loginTab.addEventListener('click', () => showTab('login'));
+        profileTab.addEventListener('click', () => showTab('profile'));
+        tokenTab.addEventListener('click', () => showTab('token'));
+
+        function showTab(tabName) {
+            registerTab.classList.remove('border-blue-500');
+            loginTab.classList.remove('border-blue-500');
+            profileTab.classList.remove('border-blue-500');
+            tokenTab.classList.remove('border-blue-500');
+            
+            registerForm.classList.add('hidden');
+            loginForm.classList.add('hidden');
+            profileSection.classList.add('hidden');
+            tokenSection.classList.add('hidden');
+            
+            if (tabName === 'register') {
+                registerTab.classList.add('border-blue-500');
+                registerForm.classList.remove('hidden');
+            } else if (tabName === 'login') {
+                loginTab.classList.add('border-blue-500');
+                loginForm.classList.remove('hidden');
+            } else if (tabName === 'profile') {
+                profileTab.classList.add('border-blue-500');
+                profileSection.classList.remove('hidden');
+            } else if (tabName === 'token') {
+                tokenTab.classList.add('border-blue-500');
+                tokenSection.classList.remove('hidden');
+            }
+        }
+
+        // API Base URL
+        function getApiUrl() {
+            return apiUrlInput.value.trim();
+        }
+
+        // Display API response
+        function displayResponse(data, isError = false) {
+            responseArea.textContent = typeof data === 'string' 
+                ? data 
+                : JSON.stringify(data, null, 2);
+            
+            if (isError) {
+                responseArea.classList.remove('text-green-400');
+                responseArea.classList.add('text-red-500');
+            } else {
+                responseArea.classList.remove('text-red-500');
+                responseArea.classList.add('text-green-400');
+            }
+        }
+
+        // Update token display
+        function updateTokenDisplay() {
+            if (currentToken) {
+                tokenStatus.textContent = 'Token available';
+                tokenStatus.classList.add('text-green-500');
+                tokenStatus.classList.remove('text-red-500');
+                tokenDetails.classList.remove('hidden');
+                accessTokenDisplay.textContent = currentToken;
+                refreshTokenDisplay.textContent = currentRefreshToken;
+                expiresAtDisplay.textContent = new Date(tokenExpiry).toLocaleString();
+            } else {
+                tokenStatus.textContent = 'No token';
+                tokenStatus.classList.remove('text-green-500');
+                tokenStatus.classList.add('text-red-500');
+                tokenDetails.classList.add('hidden');
+            }
+        }
+
+        // Store token in memory and localStorage
+        function storeToken(token, refreshToken, expiresAt) {
+            currentToken = token;
+            currentRefreshToken = refreshToken;
+            tokenExpiry = expiresAt;
+            
+            // Store in localStorage
+            localStorage.setItem('ssoToken', token);
+            localStorage.setItem('ssoRefreshToken', refreshToken);
+            localStorage.setItem('ssoTokenExpiry', expiresAt);
+            
+            updateTokenDisplay();
+        }
+
+        // Clear token
+        function clearToken() {
+            currentToken = null;
+            currentRefreshToken = null;
+            tokenExpiry = null;
+            
+            // Clear from localStorage
+            localStorage.removeItem('ssoToken');
+            localStorage.removeItem('ssoRefreshToken');
+            localStorage.removeItem('ssoTokenExpiry');
+            
+            updateTokenDisplay();
+            displayResponse('Token cleared');
+        }
+
+        // Load token from localStorage on page load
+        function loadTokenFromStorage() {
+            const token = localStorage.getItem('ssoToken');
+            const refreshToken = localStorage.getItem('ssoRefreshToken');
+            const expiry = localStorage.getItem('ssoTokenExpiry');
+            
+            if (token && refreshToken && expiry) {
+                currentToken = token;
+                currentRefreshToken = refreshToken;
+                tokenExpiry = expiry;
+                updateTokenDisplay();
+            }
+        }
+
+        // API Calls
+        async function registerUser() {
+            const email = document.getElementById('registerEmail').value;
+            const password = document.getElementById('registerPassword').value;
+            
+            if (!email || !password) {
+                displayResponse('Email and password are required', true);
+                return;
+            }
+            
+            try {
+                const response = await axios.post(`${getApiUrl()}/api/register`, {
+                    email,
+                    password
+                });
+                
+                displayResponse(response.data);
+                storeToken(
+                    response.data.token,
+                    response.data.refresh_token,
+                    response.data.expires_at
+                );
+                
+                // Switch to token tab
+                showTab('token');
+            } catch (error) {
+                displayResponse(error.response?.data || error.message, true);
+            }
+        }
+
+        async function loginUser() {
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            
+            if (!email || !password) {
+                displayResponse('Email and password are required', true);
+                return;
+            }
+            
+            try {
+                const response = await axios.post(`${getApiUrl()}/api/login`, {
+                    email,
+                    password
+                });
+                
+                displayResponse(response.data);
+                storeToken(
+                    response.data.token,
+                    response.data.refresh_token,
+                    response.data.expires_at
+                );
+                
+                // Switch to token tab
+                showTab('token');
+            } catch (error) {
+                displayResponse(error.response?.data || error.message, true);
+            }
+        }
+
+        async function refreshToken() {
+            if (!currentRefreshToken) {
+                displayResponse('No refresh token available', true);
+                return;
+            }
+            
+            try {
+                const response = await axios.post(`${getApiUrl()}/api/refresh`, {
+                    refresh_token: currentRefreshToken
+                });
+                
+                displayResponse(response.data);
+                storeToken(
+                    response.data.token,
+                    response.data.refresh_token,
+                    response.data.expires_at
+                );
+            } catch (error) {
+                displayResponse(error.response?.data || error.message, true);
+            }
+        }
+
+        async function verifyToken() {
+            if (!currentToken) {
+                displayResponse('No token available', true);
+                return;
+            }
+            
+            try {
+                const response = await axios.get(`${getApiUrl()}/api/verify`, {
+                    headers: {
+                        Authorization: `Bearer ${currentToken}`
+                    }
+                });
+                
+                displayResponse(response.data);
+            } catch (error) {
+                displayResponse(error.response?.data || error.message, true);
+            }
+        }
+
+        async function getProfile() {
+            if (!currentToken) {
+                displayResponse('No token available. Please login first.', true);
+                return;
+            }
+            
+            try {
+                const response = await axios.get(`${getApiUrl()}/api/protected/profile`, {
+                    headers: {
+                        Authorization: `Bearer ${currentToken}`
+                    }
+                });
+                
+                displayResponse(response.data);
+                
+                // Show profile data
+                profileData.classList.remove('hidden');
+                profileData.innerHTML = `
+                    <p><strong>User ID:</strong> ${response.data.id}</p>
+                    <p><strong>Email:</strong> ${response.data.email}</p>
+                    <p><strong>Created:</strong> ${new Date(response.data.created_at).toLocaleString()}</p>
+                `;
+            } catch (error) {
+                displayResponse(error.response?.data || error.message, true);
+                profileData.classList.add('hidden');
+            }
+        }
+
+        // Event listeners
+        document.getElementById('registerBtn').addEventListener('click', registerUser);
+        document.getElementById('loginBtn').addEventListener('click', loginUser);
+        document.getElementById('refreshBtn').addEventListener('click', refreshToken);
+        document.getElementById('verifyTokenBtn').addEventListener('click', verifyToken);
+        document.getElementById('clearTokenBtn').addEventListener('click', clearToken);
+        document.getElementById('getProfileBtn').addEventListener('click', getProfile);
+
+        // Initialize
+        loadTokenFromStorage();
+        updateTokenDisplay();
+    </script>
+</body>
+</html>

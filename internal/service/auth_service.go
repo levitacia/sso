@@ -10,6 +10,7 @@ import (
 	"sso/internal/repository"
 	"sso/pkg/token"
 
+	gohandlers "github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -38,10 +39,12 @@ func NewSSOService(cfg config.Config) (*SSOService, error) {
 	userRepo := repository.NewUserRepository(db)
 	tokenManager := token.NewJWTManager(cfg.JWTSecret, cfg.JWTExpiration)
 
+	router := mux.NewRouter()
+
 	service := &SSOService{
 		db:           db,
 		config:       cfg,
-		router:       mux.NewRouter(),
+		router:       router,
 		userRepo:     userRepo,
 		tokenManager: tokenManager,
 	}
@@ -52,6 +55,13 @@ func NewSSOService(cfg config.Config) (*SSOService, error) {
 }
 
 func (s *SSOService) SetupRoutes() {
+	corsHandler := gohandlers.CORS(
+		gohandlers.AllowedOrigins([]string{"*"}),
+		gohandlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}),
+		gohandlers.AllowedHeaders([]string{"Content-Type", "X-Requested-With", "Accept", "Accept-Language", "Content-Language", "Origin", "Authorization"}),
+		gohandlers.AllowCredentials(),
+	)
+
 	authHandler := handlers.NewAuthHandler(s.userRepo, s.tokenManager)
 
 	profileHandler := handlers.NewProfileHandler(s.userRepo)
@@ -63,8 +73,9 @@ func (s *SSOService) SetupRoutes() {
 	s.router.HandleFunc("/api/refresh", authHandler.RefreshToken).Methods("POST")
 	s.router.HandleFunc("/api/verify", authHandler.VerifyToken).Methods("GET")
 
+	// CORS issue
 	protected := s.router.PathPrefix("/api/protected").Subrouter()
-	protected.Use(authMiddleware.Authenticate)
+	protected.Use(corsHandler, authMiddleware.Authenticate)
 	protected.HandleFunc("/profile", profileHandler.GetProfile).Methods("GET")
 }
 
@@ -74,6 +85,13 @@ func (s *SSOService) Start() error {
 		port = "8080"
 	}
 
+	corsHandler := gohandlers.CORS(
+		gohandlers.AllowedOrigins([]string{"*"}),
+		gohandlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}),
+		gohandlers.AllowedHeaders([]string{"Content-Type", "X-Requested-With", "Accept", "Accept-Language", "Content-Language", "Origin", "Authorization"}),
+		gohandlers.AllowCredentials(),
+	)
+
 	log.Printf("SSO Service starting on port %s", port)
-	return http.ListenAndServe("localhost:"+port, s.router)
+	return http.ListenAndServe("localhost:"+port, corsHandler(s.router))
 }
