@@ -14,12 +14,14 @@ import (
 
 type AuthHandler struct {
 	userRepo     repository.UserRepository
+	logRepo      repository.LogRepository
 	tokenManager *token.JWTManager
 }
 
-func NewAuthHandler(userRepo repository.UserRepository, tokenManager *token.JWTManager) *AuthHandler {
+func NewAuthHandler(userRepo repository.UserRepository, logRepo repository.LogRepository, tokenManager *token.JWTManager) *AuthHandler {
 	return &AuthHandler{
 		userRepo:     userRepo,
+		logRepo:      logRepo,
 		tokenManager: tokenManager,
 	}
 }
@@ -43,6 +45,14 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.logRepo.StoreLoginAttempt(&repository.LoginAttempt{
+		UserID:    user.ID,
+		Email:     user.Email,
+		Success:   true,
+		IP:        getIP(r),
+		UserAgent: r.UserAgent(),
+	})
+
 	tokenResp, err := h.tokenManager.Generate(user.ID)
 	if err != nil {
 		http.Error(w, "Failed to generate tokens", http.StatusInternalServerError)
@@ -63,14 +73,37 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	user, err := h.userRepo.GetUserByEmail(req.Email)
 	if err != nil {
+		h.logRepo.StoreLoginAttempt(&repository.LoginAttempt{
+			Email:     req.Email,
+			Success:   false,
+			IP:        getIP(r),
+			UserAgent: r.UserAgent(),
+		})
+
 		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
+		h.logRepo.StoreLoginAttempt(&repository.LoginAttempt{
+			UserID:    user.ID,
+			Email:     user.Email,
+			Success:   false,
+			IP:        getIP(r),
+			UserAgent: r.UserAgent(),
+		})
+
 		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
+
+	h.logRepo.StoreLoginAttempt(&repository.LoginAttempt{
+		UserID:    user.ID,
+		Email:     user.Email,
+		Success:   true,
+		IP:        getIP(r),
+		UserAgent: r.UserAgent(),
+	})
 
 	tokenResp, err := h.tokenManager.Generate(user.ID)
 	if err != nil {
@@ -80,6 +113,23 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(tokenResp)
+}
+
+func getIP(r *http.Request) string {
+	// Try X-Forwarded-For header first (for proxies)
+	ip := r.Header.Get("X-Forwarded-For")
+	if ip != "" {
+		return strings.Split(ip, ",")[0]
+	}
+
+	// Try X-Real-IP header next
+	ip = r.Header.Get("X-Real-IP")
+	if ip != "" {
+		return ip
+	}
+
+	// Fall back to RemoteAddr
+	return strings.Split(r.RemoteAddr, ":")[0]
 }
 
 func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {

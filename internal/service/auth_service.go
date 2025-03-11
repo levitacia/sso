@@ -21,6 +21,7 @@ type SSOService struct {
 	config       config.Config
 	router       *mux.Router
 	userRepo     repository.UserRepository
+	logRepo      repository.LogRepository
 	tokenManager *token.JWTManager
 }
 
@@ -37,6 +38,13 @@ func NewSSOService(cfg config.Config) (*SSOService, error) {
 	}
 
 	userRepo := repository.NewUserRepository(db)
+
+	logRepo, err := repository.NewRedisLogRepository(cfg.RedisURL)
+	if err != nil {
+		log.Printf("Failed to connect to Redis: %v", err)
+		return nil, err
+	}
+
 	tokenManager := token.NewJWTManager(cfg.JWTSecret, cfg.JWTExpiration)
 
 	router := mux.NewRouter()
@@ -46,6 +54,7 @@ func NewSSOService(cfg config.Config) (*SSOService, error) {
 		config:       cfg,
 		router:       router,
 		userRepo:     userRepo,
+		logRepo:      logRepo,
 		tokenManager: tokenManager,
 	}
 
@@ -62,10 +71,10 @@ func (s *SSOService) SetupRoutes() {
 		gohandlers.AllowCredentials(),
 	)
 
-	authHandler := handlers.NewAuthHandler(s.userRepo, s.tokenManager)
+	authHandler := handlers.NewAuthHandler(s.userRepo, s.logRepo, s.tokenManager)
 
 	profileHandler := handlers.NewProfileHandler(s.userRepo)
-
+	logHandler := handlers.NewLogHandler(s.userRepo, s.logRepo)
 	authMiddleware := middleware.NewAuthMiddleware(s.tokenManager)
 
 	s.router.HandleFunc("/api/register", authHandler.Register).Methods("POST")
@@ -77,6 +86,7 @@ func (s *SSOService) SetupRoutes() {
 	protected := s.router.PathPrefix("/api/protected").Subrouter()
 	protected.Use(corsHandler, authMiddleware.Authenticate)
 	protected.HandleFunc("/profile", profileHandler.GetProfile).Methods("GET")
+	protected.HandleFunc("/logs", logHandler.GetUserLogs).Methods("GET")
 }
 
 func (s *SSOService) Start() error {
