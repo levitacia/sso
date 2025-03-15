@@ -64,6 +64,9 @@
                 <!-- Added Login Logs section -->
                 <h3 class="text-lg font-bold mt-6 mb-2">Login Logs</h3>
                 <button id="getLogsBtn" class="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600">Get Login Logs</button>
+                <button id="downloadCSV" class="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600">.csv</button>
+                <button id="downloadXLS" class="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600">.xls</button>
+                <button id="downloadTXT" class="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600">.txt</button>
                 <div id="logsData" class="mt-4 p-4 border rounded bg-gray-50 hidden">
                     <table class="min-w-full">
                         <thead>
@@ -424,6 +427,177 @@
             }
         }
 
+        // CSV download function
+        async function downloadCSV() {
+            if (!currentToken) {
+                displayResponse('No token available. Please login first.', true);
+                return;
+            }
+            
+            try {
+                const response = await axios.get(`${getApiUrl()}/api/protected/logs`, {
+                    headers: {
+                        Authorization: `Bearer ${currentToken}`
+                    }
+                });
+                
+                displayResponse('Downloading logs as CSV file...');
+                
+                // Create CSV content with header row
+                let csvContent = "User,Timestamp,Status,IP,UserAgent\n";
+                
+                response.data.forEach(log => {
+                    // Format the date for CSV
+                    const date = new Date(log.timestamp).toISOString();
+                    // Escape any commas in fields
+                    const email = `"${log.email}"`;
+                    const status = log.success ? "Success" : "Failed";
+                    const ip = `"${log.ip}"`;
+                    const userAgent = `"${log.user_agent.replace(/"/g, '""')}"`;
+                    
+                    csvContent += `${email},${date},${status},${ip},${userAgent}\n`;
+                });
+                
+                // Create a CSV file
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                
+                // Create a link and click it to trigger download
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `logs_${new Date().toISOString().slice(0,10)}.csv`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            } catch (error) {
+                displayResponse(error.response?.data || error.message, true);
+            }
+        }
+
+        // XLS download function (actually creating HTML that Excel can open)
+        async function downloadXLS() {
+            if (!currentToken) {
+                displayResponse('No token available. Please login first.', true);
+                return;
+            }
+            
+            try {
+                const response = await axios.get(`${getApiUrl()}/api/protected/logs`, {
+                    headers: {
+                        Authorization: `Bearer ${currentToken}`
+                    }
+                });
+                
+                displayResponse('Downloading logs as XLS file...');
+                
+                // Create XLS content as HTML table that Excel can open
+                let xlsContent = `
+                    <html>
+                        <head>
+                            <meta charset="UTF-8">
+                            <title>Login Logs</title>
+                        </head>
+                        <body>
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>User</th>
+                                        <th>Timestamp</th>
+                                        <th>Status</th>
+                                        <th>IP</th>
+                                        <th>User Agent</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                `;
+                
+                response.data.forEach(log => {
+                    const date = new Date(log.timestamp).toLocaleString();
+                    const status = log.success ? "Success" : "Failed";
+                    
+                    xlsContent += `
+                        <tr>
+                            <td>${log.email}</td>
+                            <td>${date}</td>
+                            <td>${status}</td>
+                            <td>${log.ip}</td>
+                            <td>${log.user_agent}</td>
+                        </tr>
+                    `;
+                });
+                
+                xlsContent += `
+                                </tbody>
+                            </table>
+                        </body>
+                    </html>
+                `;
+                
+                // Create an XLS file (HTML that Excel can open)
+                const blob = new Blob([xlsContent], { type: 'application/vnd.ms-excel' });
+                const url = URL.createObjectURL(blob);
+                
+                // Create a link and click it to trigger download
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `logs_${new Date().toISOString().slice(0,10)}.xls`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            } catch (error) {
+                displayResponse(error.response?.data || error.message, true);
+            }
+        }
+
+        // Improved TXT download function
+        async function downloadTXT() {
+            if (!currentToken) {
+                displayResponse('No token available. Please login first.', true);
+                return;
+            }
+            
+            try {
+                const response = await axios.get(`${getApiUrl()}/api/protected/logs`, {
+                    headers: {
+                        Authorization: `Bearer ${currentToken}`
+                    }
+                });
+                
+                displayResponse('Downloading logs as TXT file...');
+                
+                // Format logs in a more readable text format
+                let txtContent = "LOGIN LOGS\n";
+                txtContent += "==========\n\n";
+                
+                response.data.forEach(log => {
+                    const date = new Date(log.timestamp).toLocaleString();
+                    txtContent += `User: ${log.email}\n`;
+                    txtContent += `Time: ${date}\n`;
+                    txtContent += `Status: ${log.success ? 'Success' : 'Failed'}\n`;
+                    txtContent += `IP: ${log.ip}\n`;
+                    txtContent += `User Agent: ${log.user_agent}\n`;
+                    txtContent += `----------------------------------------\n\n`;
+                });
+                
+                // Create a text file with formatted content
+                const blob = new Blob([txtContent], { type: 'text/plain;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                
+                // Create a link and click it to trigger download
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `logs_${new Date().toISOString().slice(0,10)}.txt`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            } catch (error) {
+                displayResponse(error.response?.data || error.message, true);
+            }
+        }
+
         // Event listeners
         document.getElementById('registerBtn').addEventListener('click', registerUser);
         document.getElementById('loginBtn').addEventListener('click', loginUser);
@@ -432,6 +606,9 @@
         document.getElementById('clearTokenBtn').addEventListener('click', clearToken);
         document.getElementById('getProfileBtn').addEventListener('click', getProfile);
         document.getElementById('getLogsBtn').addEventListener('click', getLogs);
+        document.getElementById('downloadCSV').addEventListener('click', downloadCSV);
+        document.getElementById('downloadXLS').addEventListener('click', downloadXLS);
+        document.getElementById('downloadTXT').addEventListener('click', downloadTXT);
 
         // Initialize
         loadTokenFromStorage();
