@@ -9,6 +9,7 @@ import (
 	"sso/internal/models"
 	"sso/internal/repository"
 	"sso/pkg/token"
+	"time"
 
 	gohandlers "github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
@@ -102,6 +103,15 @@ func (s *SSOService) Start() error {
 		gohandlers.AllowCredentials(),
 	)
 
+	srv := &http.Server{
+		Addr:         "localhost:" + port,
+		Handler:      corsHandler(s.router),
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  120 * time.Second,
+	}
+
 	log.Printf("SSO Service starting on port %s", port)
-	return http.ListenAndServe("localhost:"+port, corsHandler(s.router))
+	return srv.ListenAndServe()
+	//return http.ListenAndServe("localhost:"+port, corsHandler(s.router))
 }
